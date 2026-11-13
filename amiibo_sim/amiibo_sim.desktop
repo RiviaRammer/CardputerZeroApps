@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=amiibo_sim
+Comment=Select and emulate a local Amiibo backup
+Exec=/usr/bin/amiibo_sim
+Icon=share/images/amiibo_sim.png
+Terminal=false
+Categories=Utility;
+StartupNotify=false

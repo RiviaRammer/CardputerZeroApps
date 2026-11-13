@@ -1,0 +1,6 @@
+/build/
+/dumps/
+/dist/
+__pycache__/
+*.[bB][iI][nN]
+*.[sS][iI][gG]

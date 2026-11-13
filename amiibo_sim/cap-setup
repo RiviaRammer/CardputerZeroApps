@@ -1,0 +1,42 @@
+#!/bin/sh
+# Run as the current user from APPLaunch, or manually as admin to load the overlay.
+set -eu
+PATH=/usr/bin:/bin
+export PATH
+[ "$#" -eq 0 ] || exit 64
+
+leds=/sys/class/leds
+[ -r "$leds/ext_usb_gpio_fun/brightness" ] || exit 10
+[ "$(cat "$leds/ext_usb_gpio_fun/brightness")" = 0 ] || exit 11
+
+spi=/dev/spidev0.2
+if [ ! -c "$spi" ]; then
+    overlay=spi0-spidev2-gpio22-overlay
+    [ -r "/boot/firmware/overlays/$overlay.dtbo" ] || exit 12
+    [ "$(id -u)" = 0 ] || exit 13
+    /usr/bin/dtoverlay -d /boot/firmware/overlays "$overlay" || exit 13
+    for attempt in 1 2 3 4 5; do
+        [ -c "$spi" ] && break
+        sleep 0.1
+    done
+    [ -c "$spi" ] || exit 13
+fi
+
+if [ "$(id -u)" = 0 ]; then
+    # The dynamically created node may still be root:root 0600.
+    chgrp spi "$spi" && chmod 0660 "$spi" || exit 16
+elif [ ! -r "$spi" ] || [ ! -w "$spi" ]; then
+    exit 16
+fi
+
+power=$leds/ext_5v_out
+brightness=$(cat "$power/brightness") || exit 14
+if [ "$brightness" = 0 ]; then
+    cat "$power/max_brightness" > "$power/brightness" || exit 14
+    brightness=$(cat "$power/brightness") || exit 14
+    [ "$brightness" -gt 0 ] || exit 14
+fi
+if ! /usr/bin/pinctrl get 26 2>/dev/null | grep -Eq '^26: op .*\| hi([[:space:]]|$)'; then
+    /usr/bin/pinctrl set 26 op dh || exit 15
+fi
+sleep 0.1
