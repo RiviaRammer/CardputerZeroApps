@@ -1,0 +1,14 @@
+{
+  "api_key": "",
+  "base_url": "https://api.xiaomimimo.com/v1",
+  "chat_model": "mimo-v2.6-flash",
+  "asr_model": "mimo-v2.5-asr",
+  "tts_model": "mimo-v2.5-tts",
+  "voice": "mimo_default",
+  "capture_device": "default",
+  "playback_device": "default",
+  "max_record_seconds": 30,
+  "max_completion_tokens": 512,
+  "history_turns": 4,
+  "system_prompt": "你是 MiMo 语音助手。请用简洁自然的中文回答，通常不超过三句话，不使用 Markdown。"
+}

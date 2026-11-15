@@ -1,0 +1,15 @@
+#ifndef LV_CONF_H
+#define LV_CONF_H
+#define LV_COLOR_DEPTH 16
+#define LV_MEM_SIZE (4 * 1024 * 1024)
+#define LV_USE_LINUX_FBDEV 1
+#define LV_USE_OS LV_OS_NONE
+#define LV_FONT_MONTSERRAT_12 1
+#define LV_FONT_MONTSERRAT_14 1
+#define LV_USE_LOG 0
+#define LV_USE_TINY_TTF 1
+#define LV_TINY_TTF_FILE_SUPPORT 1
+#define LV_USE_FS_POSIX 1
+#define LV_FS_POSIX_LETTER 'A'
+#define LV_FS_POSIX_PATH ""
+#endif

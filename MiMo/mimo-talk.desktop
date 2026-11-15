@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=MiMo Talk
+Comment=Streaming voice conversations with Xiaomi MiMo
+Exec=/usr/bin/mimo-talk
+Icon=share/images/mimo-talk.png
+Terminal=false
+Categories=Utility;
+StartupNotify=false
