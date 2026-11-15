@@ -1,4 +1,4 @@
-"""Reproduce the geometric launcher icon (Pillow is a build-time tool only)."""
+"""Generate the launcher icon, or pass a path to export the 256 px store icon."""
 from pathlib import Path
 import sys
 
@@ -17,4 +17,7 @@ draw.line((128, 178, 128, 209), fill="#F4FAFF", width=12)
 draw.rounded_rectangle((96, 204, 160, 216), radius=6, fill="#F4FAFF")
 for x, y in ((42, 105), (210, 105)):
     draw.rounded_rectangle((x - 5, y, x + 5, y + 36), radius=5, fill="#6EF1B4")
-image.resize((128, 128), Image.Resampling.LANCZOS).save(Path(__file__).resolve().parents[1] / "mimo.png")
+if len(sys.argv) == 2:
+    image.save(Path(sys.argv[1]))
+else:
+    image.resize((128, 128), Image.Resampling.LANCZOS).save(Path(__file__).resolve().parents[1] / "mimo.png")

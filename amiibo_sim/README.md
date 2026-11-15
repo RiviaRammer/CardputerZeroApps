@@ -46,7 +46,7 @@ SPI 是 Zero 与 ST25R3916 之间的有线通信总线。Linux 的 `/dev/spidev0
 
 ## 构建 LCD 版
 
-在 Linux 或 WSL 中使用 CMake、Ninja 和 AArch64 工具链。可以用 `-DLVGL_SOURCE_DIR=/path/to/lvgl` 指定 Template 已缓存的 LVGL 9.5 源码。
+在本 README 所在的 `amiibo_sim/` 目录运行以下命令。Linux 或 WSL 需要 CMake、Ninja 和 AArch64 工具链。CMake 默认获取 LVGL 9.5.0，也可以用 `-DLVGL_SOURCE_DIR=/path/to/lvgl` 指定已有源码。
 
 ```sh
 cmake -S . -B build/lcd-arm64 -G Ninja \
@@ -56,6 +56,8 @@ cmake -S . -B build/lcd-arm64 -G Ninja \
 cmake --build build/lcd-arm64
 sh package.sh
 ```
+
+`src/` 存放应用源码和运行时脚本。`build/` 由编译生成，`dist/` 由打包脚本生成，里面的 `.deb` 可复制到 Zero 安装。这两个目录均由 Git 忽略。
 
 ## 原命令行版
 
@@ -82,10 +84,10 @@ sh package.sh
 
 ### 切换 UID
 
-可选。使用本机的 Python 3.10+ 和 `cryptography`，从本目录运行下面的命令。同目录的 `generate_uid_pool.py` 提供签名实现。用同一份原始备份生成 540 字节变体，再把原始备份和池传到 Zero。命令行模拟只加载备份和变体。
+可选。使用本机的 Python 3.10+ 和 `cryptography`。从应用根目录运行 UID 池生成命令，再把原始备份和池传到 Zero 运行模拟。
 
 ```sh
-python3 -B make_uid_pool.py --dump my-amiibo.bin --key key_retail.bin --output uid-pool.bin
+python3 -B src/make_uid_pool.py --dump my-amiibo.bin --key key_retail.bin --output uid-pool.bin
 sudo ./amiibo-zero-arm64 emulate my-amiibo.bin --uid-pool uid-pool.bin
 ```
 
@@ -102,7 +104,6 @@ sudo ./amiibo-zero-arm64 emulate my-amiibo.bin --uid-pool uid-pool.bin
 在 Linux 或 WSL 中进入本目录。依赖为 C11 编译器、Make 和 Linux SPI/GPIO UAPI 头文件。交叉构建另需 `aarch64-linux-gnu-gcc`。
 
 ```sh
-make test      # 在构建机上运行 NTAG215 和 NFC 中断回归测试
 make           # 本机编译到 build/amiibo-zero
 make arm64     # 交叉编译到 build/amiibo-zero-arm64
 ```

@@ -1,6 +1,6 @@
 # Third-party notices
 
-`generate_uid_pool.py` implements the Amiibo data layout and cryptographic
+`src/generate_uid_pool.py` implements the Amiibo data layout and cryptographic
 flow described by the MIT-licensed amiitool component used by
 <https://github.com/solosky/pixl.js>.
 

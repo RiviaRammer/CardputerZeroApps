@@ -56,7 +56,7 @@ sudo apt install ./mimo-talk_0.2.2_arm64.deb
 
 参考：[MiMoKit](https://github.com/RiviaRammer/MiMoKit) · [ASR](https://mimo.mi.com/docs/zh-CN/api/audio/Speech-Recognition-post) · [Chat](https://mimo.mi.com/docs/zh-CN/api/chat/openai-api-post) · [TTS](https://mimo.mi.com/docs/zh-CN/api/audio/tts-post) · [TTS 流式 PCM 示例](https://mimo.mi.com/docs/zh-CN/quick-start/usage-guide/audio/speech-synthesis-v2.5) · [限流](https://mimo.mi.com/docs/zh-CN/api/guidance/rate-limit)
 
-## 构建与验证
+## 构建与打包
 
 Linux/WSL 需要 CMake、Ninja、AArch64 交叉编译器和 dpkg-dev。与 amiibo_sim 相同，可以指定已经下载的 LVGL 9.5 源码；省略该参数时自动获取 v9.5.0。
 
@@ -68,10 +68,11 @@ cmake -S . -B build/arm64 -G Ninja \
   -DLVGL_SOURCE_DIR=/path/to/lvgl-9.5
 cmake --build build/arm64 -j4
 sh package.sh
-python3 -B -m unittest discover -s tests -v
 ```
 
-输出 `dist/mimo-talk_0.2.2_arm64.deb`。仓库本机缓存路径适用时，也可运行 `sh build-local.sh`。测试不访问外部 API，不需要 API Key。
+编译产物放在 `build/`，打包输出为 `dist/mimo-talk_0.2.2_arm64.deb`。这两个目录均由 Git 忽略。仓库本机缓存路径适用时，也可运行 `sh build-local.sh`。
+
+提交 CardputerZero 商店时，在 Icon 字段单独上传 PNG。可以用 `python3 tools/make_icon.py dist/mimo-talk-store-icon.png` 导出 256×256 商店图标。此命令需要 Pillow。
 
 ## 真机验收与排查
 
@@ -79,4 +80,4 @@ python3 -B -m unittest discover -s tests -v
 - 在系统录音应用确认内置麦克风正常，检查系统音量，再测试中文问答、连续两轮历史、取消、断网和错误 Key。真实硬件的音频路由、键盘 Fn 映射和 API 账户权限必须在设备上验证。
 - LCD 沿用 `LV_LINUX_FBDEV_DEVICE` / `APPLAUNCH_LINUX_FBDEV_DEVICE`，默认 `/dev/fb0`。先识别 tca8418 内置键盘，否则选择支持字母和 Enter 的 evdev 设备。
 - HTTPS 失败时先检查 Wi-Fi、系统日期和 CA 证书。401 检查 Key，402 检查余额，429 稍后重试。
-- 此项目未包含密钥，也不在构建/测试时调用付费 API。
+- 构建不需要 API Key。

@@ -4,31 +4,22 @@ CPPFLAGS += -D_POSIX_C_SOURCE=200809L
 CFLAGS ?= -O2
 CFLAGS += -std=c11 -Wall -Wextra -Wpedantic
 
-.PHONY: all arm64 test clean
+cli_sources := src/main.c src/ntag215.c src/st25r3916.c
+cli_headers := src/ntag215.h src/st25r3916.h
+
+.PHONY: all arm64 clean
 
 all: build/amiibo-zero
 
-build/amiibo-zero: main.c ntag215.c st25r3916.c ntag215.h st25r3916.h
+build/amiibo-zero: $(cli_sources) $(cli_headers)
 	mkdir -p build
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) main.c ntag215.c st25r3916.c -o $@ $(LDLIBS)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $(cli_sources) -o $@ $(LDLIBS)
 
 arm64: build/amiibo-zero-arm64
 
-build/amiibo-zero-arm64: main.c ntag215.c st25r3916.c ntag215.h st25r3916.h
+build/amiibo-zero-arm64: $(cli_sources) $(cli_headers)
 	mkdir -p build
-	$(ARM64_CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) main.c ntag215.c st25r3916.c -o $@ $(LDLIBS)
-
-test: build/test_ntag215 build/test_st25r3916
-	./build/test_ntag215
-	./build/test_st25r3916
-
-build/test_st25r3916: test_st25r3916.c st25r3916.c st25r3916.h ntag215.c ntag215.h
-	mkdir -p build
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) test_st25r3916.c ntag215.c -o $@ $(LDLIBS)
-
-build/test_ntag215: test_ntag215.c ntag215.c ntag215.h
-	mkdir -p build
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) test_ntag215.c ntag215.c -o $@ $(LDLIBS)
+	$(ARM64_CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $(cli_sources) -o $@ $(LDLIBS)
 
 clean:
-	rm -f build/amiibo-zero build/amiibo-zero-arm64 build/test_ntag215 build/test_st25r3916
+	rm -f build/amiibo-zero build/amiibo-zero-arm64
