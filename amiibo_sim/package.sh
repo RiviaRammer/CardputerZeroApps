@@ -2,7 +2,7 @@
 set -eu
 cd "$(dirname "$0")"
 build_dir=${1:-build/lcd-arm64}
-version=0.1.8
+version=0.1.9-1
 test -f "$build_dir/amiibo_sim"
 stage=$(mktemp -d)
 trap 'rm -rf -- "$stage"' EXIT

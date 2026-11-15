@@ -22,6 +22,6 @@ enum cap_probe_result {
 
 int cap_probe(const char *spi_device);
 int cap_emulate(const char *spi_device, const char *gpio_chip, const struct amiibo_images *images,
-                const volatile sig_atomic_t *stop);
+                bool trace, const volatile sig_atomic_t *stop);
 
 #endif

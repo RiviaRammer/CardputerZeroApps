@@ -41,6 +41,17 @@ enum {
     FIFO_SIZE = 512, NFC_IRQ_GPIO = 23, SPI_SPEED_HZ = 8000000
 };
 
+enum { TRACE_LIMIT = 64 };
+
+struct command_trace {
+    uint8_t opcode;
+    uint8_t start_page;
+    uint8_t end_page;
+    bool has_page_range;
+    unsigned reply_bits;
+    bool tx_done;
+};
+
 struct listener {
     int spi;
     int irq;
@@ -71,6 +82,12 @@ struct listener {
     unsigned commands;
     unsigned rx_errors;
     unsigned tx_errors;
+    uint8_t pending_rx_errors;
+    bool trace_enabled;
+    size_t trace_count;
+    unsigned trace_dropped;
+    struct command_trace trace[TRACE_LIMIT];
+    struct command_trace *trace_reply;
 };
 
 static int spi_transfer(int fd, const uint8_t *tx, uint8_t *rx, size_t length)
@@ -217,6 +234,8 @@ static int arm_target(struct listener *dev)
     dev->halted = false;
     dev->tx_pending = false;
     dev->queued = 0;
+    dev->trace_reply = NULL;
+    dev->pending_rx_errors = 0;
 
     if (command(spi, CMD_STOP) < 0 ||
         write_reg(spi, REG_TARGET, TARGET_NFC_A_AUTO) < 0 ||
@@ -320,6 +339,30 @@ static int begin_reply(struct listener *dev)
     return 0;
 }
 
+static void trace_command(struct listener *dev, const uint8_t *frame, size_t length)
+{
+    dev->trace_reply = NULL;
+    if (dev->trace_count == TRACE_LIMIT) {
+        ++dev->trace_dropped;
+        return;
+    }
+
+    struct command_trace *entry = &dev->trace[dev->trace_count++];
+    *entry = (struct command_trace){.opcode = frame[0]};
+    if (dev->reply.kind == NTAG_BYTES) entry->reply_bits = (unsigned)dev->reply.length * 8;
+    else if (dev->reply.kind == NTAG_NIBBLE) entry->reply_bits = 4;
+    if (frame[0] == 0x30 && length == 2 && dev->reply.kind == NTAG_BYTES) {
+        entry->has_page_range = true;
+        entry->start_page = frame[1];
+        entry->end_page = (frame[1] + 3) % NTAG_PAGE_COUNT;
+    } else if (frame[0] == 0x3A && length == 3) {
+        entry->has_page_range = true;
+        entry->start_page = frame[1];
+        entry->end_page = frame[2];
+    }
+    dev->trace_reply = entry;
+}
+
 static int handle_frame(struct listener *dev, struct ntag215 *tag, uint8_t errors, bool just_selected)
 {
     uint8_t fifo[2];
@@ -351,6 +394,7 @@ static int handle_frame(struct listener *dev, struct ntag215 *tag, uint8_t error
     // A reader may select and halt just to inventory the tag.
     dev->scan_attempted |= frame[0] != 0x50;
     ntag215_command(tag, frame, length - 2, &dev->reply); // CRC-A checked by ST25R3916.
+    if (dev->trace_enabled) trace_command(dev, frame, length - 2);
 
     dev->last_command = frame[0];
     dev->reads += (frame[0] == 0x30 || frame[0] == 0x3A) && dev->reply.kind == NTAG_BYTES;
@@ -388,13 +432,13 @@ static int end_session(struct listener *dev)
 static int handle_irq(struct listener *dev, struct ntag215 *tag)
 {
     int spi = dev->spi;
-    uint8_t errors, status[2], target;
-    // Read errors first because the main IRQ read can clear their status.
-    if (receive_bytes(spi, SPI_READ | REG_IRQ_ERROR, &errors, 1) < 0 ||
-        receive_bytes(spi, SPI_READ | REG_IRQ_MAIN, status, sizeof(status)) < 0 ||
-        receive_bytes(spi, SPI_READ | REG_IRQ_TARGET, &target, 1) < 0) {
+    uint8_t status[4];
+    // Each IRQ register clears on read. Collect the contiguous registers in
+    // one SPI transaction and retain RX errors until the frame is handled.
+    if (receive_bytes(spi, SPI_READ | REG_IRQ_MAIN, status, sizeof(status)) < 0) {
         return -1;
     }
+    const uint8_t target = status[3];
     // TX_END can be latched together with field-off. Account for the reply
     // before re-arming, which clears the current transmission state.
     if (dev->tx_pending && (status[0] & IRQ_TX_END)) {
@@ -403,6 +447,7 @@ static int handle_irq(struct listener *dev, struct ntag215 *tag)
             ++dev->tx_errors;
         } else {
             ++dev->replies;
+            if (dev->trace_reply) dev->trace_reply->tx_done = true;
             if (dev->reply.kind == NTAG_BYTES) {
                 dev->auth_reply_sent |= dev->last_command == 0x1B;
                 dev->read_reply_sent |= dev->last_command == 0x30 || dev->last_command == 0x3A;
@@ -444,6 +489,7 @@ static int handle_irq(struct listener *dev, struct ntag215 *tag)
         }
     }
     if (dev->active) {
+        dev->pending_rx_errors |= status[2] & IRQ_RX_ERRORS;
         dev->rx_starts += (status[0] & IRQ_RX_START) != 0;
         dev->rx_ends += (status[0] & IRQ_RX_END) != 0;
     }
@@ -457,7 +503,9 @@ static int handle_irq(struct listener *dev, struct ntag215 *tag)
         dev->queued += remaining;
     }
     if (dev->active && (status[0] & IRQ_RX_END)) {
-        return handle_frame(dev, tag, errors & IRQ_RX_ERRORS, just_selected);
+        uint8_t errors = dev->pending_rx_errors;
+        dev->pending_rx_errors = 0;
+        return handle_frame(dev, tag, errors, just_selected);
     }
     return 0;
 }
@@ -469,7 +517,22 @@ static void print_session(struct listener *dev)
            dev->sessions, dev->reads, dev->auths, dev->writes, (unsigned)dev->last_command);
     if (dev->scan_attempted) {
         puts(dev->read_reply_sent && dev->auth_reply_sent ? "Scan result: success" : "Scan result: failed");
+        if (dev->trace_enabled) {
+            for (size_t i = 0; i < dev->trace_count; ++i) {
+                const struct command_trace *entry = &dev->trace[i];
+                printf("Trace: op=0x%02X", (unsigned)entry->opcode);
+                if (entry->has_page_range) {
+                    printf(" pages=0x%02X-0x%02X", (unsigned)entry->start_page, (unsigned)entry->end_page);
+                }
+                printf(" reply_bits=%u tx=%s\n", entry->reply_bits,
+                       !entry->reply_bits ? "none" : entry->tx_done ? "done" : "unfinished");
+            }
+            if (dev->trace_dropped) printf("Trace: %u additional commands omitted\n", dev->trace_dropped);
+        }
     }
+    dev->trace_count = 0;
+    dev->trace_dropped = 0;
+    dev->trace_reply = NULL;
     dev->scan_attempted = false;
     dev->auth_reply_sent = false;
     dev->read_reply_sent = false;
@@ -495,7 +558,7 @@ static int switch_image(struct listener *dev, struct ntag215 *tag,
         return 0;
     }
     if (key == 'r' && !images->count) {
-        puts("No UID pool loaded.");
+        puts("No UID pool loaded. Start emulate with --uid-pool FILE to use r.");
         return 0;
     }
 
@@ -536,7 +599,7 @@ static int switch_image(struct listener *dev, struct ntag215 *tag,
     } else {
         printf("Ready: UID variant %zu/%zu.\n", dev->variant + 1, images->count);
     }
-    print_uid(tag);
+    if (!dev->trace_enabled) print_uid(tag);
     return 0;
 }
 
@@ -627,10 +690,10 @@ static int listen_for_reader(struct listener *dev, struct ntag215 *tag,
 }
 
 int cap_emulate(const char *spi_device, const char *gpio_chip, const struct amiibo_images *images,
-                const volatile sig_atomic_t *stop)
+                bool trace, const volatile sig_atomic_t *stop)
 {
     struct ntag215 tag = *images->original;
-    struct listener dev = {.spi = open_spi(spi_device, true), .variant = images->count};
+    struct listener dev = {.spi = open_spi(spi_device, true), .variant = images->count, .trace_enabled = trace};
     if (dev.spi < 0) {
         return 1;
     }
@@ -644,10 +707,11 @@ int cap_emulate(const char *spi_device, const char *gpio_chip, const struct amii
         perror("ST25R3916 listener setup");
         result = 1;
     } else {
-        print_uid(&tag);
+        if (!trace) print_uid(&tag);
         puts("Emulating. Hold the Cap near the amiibo reader. Ctrl+C to stop.");
         if (isatty(STDIN_FILENO)) {
-            puts("Enter r for a random UID variant or o to restore the original.");
+            puts(images->count ? "Enter r for a random UID variant or o to restore the original." :
+                                 "Using the original UID. Enter o to restore the original dump.");
         }
         if (listen_for_reader(&dev, &tag, images, stop) < 0) {
             perror("ST25R3916 listener");

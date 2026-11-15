@@ -4,10 +4,10 @@ Cardputer Zero 上的 Amiibo LCD 应用，使用 Cap CC1101 上的 ST25R3916。�
 
 ## 安装和导入
 
-在 Zero 上安装 `amiibo-sim_0.1.8_arm64.deb`，然后从 APPLaunch 打开 **amiibo_sim**。
+在 Zero 上安装 `amiibo-sim_0.1.9-1_arm64.deb`，然后从 APPLaunch 打开 **amiibo_sim**。
 
 ```sh
-sudo apt install ./amiibo-sim_0.1.8_arm64.deb
+sudo apt install ./amiibo-sim_0.1.9-1_arm64.deb
 ```
 
 首次打开时，应用会自动创建当前用户的 `~/amiibo_sim/`。把你自己的 **540 字节原始 NTAG215 备份**放在这里，或按游戏系列放进多级子目录。屏幕只显示当前一层，文件夹排在备份前面。支持中文文件夹和文件名，以及大小写混用的 `.bin` 扩展名。长名称在选中时滚动。中文显示使用安装时随包解析的 Debian 字体依赖。
@@ -15,12 +15,13 @@ sudo apt install ./amiibo-sim_0.1.8_arm64.deb
 如果要刷新 UID，把你自己的 **160 字节**密钥放在 `~/amiibo_sim/` 根目录，文件名用 `key_retail.bin` 或 `retail.bin`。所有子目录共用这份密钥。两个文件都可读取且大小正确时，优先使用 `key_retail.bin`。安装包不包含任何 Amiibo 备份、零售密钥或生成的 UID 池。
 
 - **F / X** 或方向键移动，**Enter** 打开选中的文件夹或启动选中的备份。
+- 开始模拟时隐藏左上角路径并暂停文件名滚动。停止模拟后恢复路径和滚动。
 - **T** 重新扫描当前目录，**H** 重试 Cap 初始化。
 - 浏览时按 **Esc** 返回上一级，光标停在刚退出的文件夹。在根目录按 **Esc** 退出。
 - 右上角显示密钥是否找到、能否读取且大小正确。选择备份时验证密钥与备份能否签名。可签名时，应用为本次选中的备份生成 256 个预签名变体，另外可随时恢复原始 UID。每次重新选卡时重新生成。
 - 模拟时按 **R** 随机换一个 UID，**O** 恢复原始备份。移开 Switch 手柄后才会切换。**Esc** 停止模拟并回到当前目录。
 - 没有密钥时可以用原始 UID。签名失败时，应用显示错误并继续使用原始 UID。
-- LCD 只显示读卡结果。读卡器读取数据且设备发出认证回复后显示 `Amiibo read successful`，读取未完成则显示 `Read incomplete - try again`。只选卡后立即离开的探测不会更新结果。
+- 芯片报告读页和认证回复均已发送后，LCD 显示 `NFC replies sent - check Switch`。以 Switch 上的游戏提示为准。读取未完成则显示 `Read incomplete - try again`。只选卡后立即离开的探测不会更新结果。
 
 安装新包时，APT 会替换旧的 `zero-amiibo` 安装包和启动器入口。升级后，把旧 `~/zero_amiibo/` 或 `~/amiibo/` 里的备份和密钥复制到 `~/amiibo_sim/`，再按 **T** 扫描。
 
@@ -77,6 +78,8 @@ sh package.sh
 
 `check` 校验文件尺寸与 UID/BCC。`probe` 读取 ST25R3916 身份寄存器。默认使用 `/dev/spidev0.2` 和 `/dev/gpiochip0`。如果系统的 BCM GPIO 控制器编号不同，运行 `gpioinfo` 确认 GPIO23 所属控制器，再向 `emulate` 传入 `--gpiochip /dev/gpiochipN`。具备这两个设备节点的访问权限时，可以直接运行命令。
 
+如果 Switch 拒绝识别，在 `emulate` 命令末尾加 `--trace`。每次移开手柄后，终端会列出命令码、读页范围、回复长度和发送状态。跟踪日志省略 UID、备份内容和认证密码。`Scan result: success` 表示芯片报告读页和认证回复均已发送。
+
 ### 切换 UID
 
 可选。使用本机的 Python 3.10+ 和 `cryptography`，从本目录运行下面的命令。同目录的 `generate_uid_pool.py` 提供签名实现。用同一份原始备份生成 540 字节变体，再把原始备份和池传到 Zero。命令行模拟只加载备份和变体。
@@ -99,7 +102,7 @@ sudo ./amiibo-zero-arm64 emulate my-amiibo.bin --uid-pool uid-pool.bin
 在 Linux 或 WSL 中进入本目录。依赖为 C11 编译器、Make 和 Linux SPI/GPIO UAPI 头文件。交叉构建另需 `aarch64-linux-gnu-gcc`。
 
 ```sh
-make test      # 在构建机上运行 NTAG215 协议测试
+make test      # 在构建机上运行 NTAG215 和 NFC 中断回归测试
 make           # 本机编译到 build/amiibo-zero
 make arm64     # 交叉编译到 build/amiibo-zero-arm64
 ```

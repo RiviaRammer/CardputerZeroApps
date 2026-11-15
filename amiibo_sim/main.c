@@ -18,7 +18,7 @@ static void usage(FILE *out)
           "  amiibo-zero check DUMP.bin\n"
           "  amiibo-zero probe [--spi DEVICE]\n"
           "  amiibo-zero emulate DUMP.bin [--uid-pool FILE] [--signature FILE]\n"
-          "                               [--spi DEVICE] [--gpiochip DEVICE]\n",
+          "                               [--spi DEVICE] [--gpiochip DEVICE] [--trace]\n",
           out);
 }
 
@@ -99,7 +99,13 @@ int main(int argc, char **argv)
     const char *gpio_chip = "/dev/gpiochip0";
     const char *signature = NULL;
     const char *pool = NULL;
-    for (int i = probe ? 2 : 3; i < argc; i += 2) {
+    bool trace = false;
+    for (int i = probe ? 2 : 3; i < argc;) {
+        if (emulate && strcmp(argv[i], "--trace") == 0) {
+            trace = true;
+            ++i;
+            continue;
+        }
         if (i + 1 == argc) {
             usage(stderr);
             return 2;
@@ -116,6 +122,7 @@ int main(int argc, char **argv)
             usage(stderr);
             return 2;
         }
+        i += 2;
     }
     if (probe) {
         return cap_probe(spi);
@@ -158,7 +165,7 @@ int main(int argc, char **argv)
         }
     }
     const struct amiibo_images images = {&original, variants, count};
-    int result = cap_emulate(spi, gpio_chip, &images, &stopping);
+    int result = cap_emulate(spi, gpio_chip, &images, trace, &stopping);
     free(variants);
     return result;
 }

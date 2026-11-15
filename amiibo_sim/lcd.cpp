@@ -129,10 +129,20 @@ void reset_selection_hint(App &app)
 
 void draw(App &app)
 {
+    // LCD and NFC share SPI0. Scrolling labels otherwise keep the display
+    // transferring pixels throughout time-sensitive card emulation.
+    const bool browsing = app.job != Job::Pool && app.job != Job::Emulate;
     const bool at_root = app.folder == app.root_folder;
-    const auto relative = app.folder.lexically_relative(app.root_folder);
-    const std::string path = at_root ? "~/amiibo_sim/" : "~/amiibo_sim/" + relative.string() + "/";
-    label(app.folder_label, path);
+    if (browsing) {
+        const auto relative = app.folder.lexically_relative(app.root_folder);
+        const std::string path = at_root ? "~/amiibo_sim/" : "~/amiibo_sim/" + relative.string() + "/";
+        label(app.folder_label, path);
+        lv_obj_remove_flag(app.folder_label, LV_OBJ_FLAG_HIDDEN);
+        lv_label_set_long_mode(app.folder_label, LV_LABEL_LONG_SCROLL_CIRCULAR);
+    } else {
+        lv_label_set_long_mode(app.folder_label, LV_LABEL_LONG_CLIP);
+        lv_obj_add_flag(app.folder_label, LV_OBJ_FLAG_HIDDEN);
+    }
     size_t first = app.selected >= 4 ? app.selected - 3 : 0;
     for (size_t i = 0; i < 4; ++i) {
         size_t index = first + i;
@@ -145,7 +155,7 @@ void draw(App &app)
             label(app.rows[i], app.entries.empty() && app.folder_accessible && i == 0 ?
                                "   No Amiibo backups" : "");
         }
-        lv_label_set_long_mode(app.rows[i], selected ? LV_LABEL_LONG_SCROLL_CIRCULAR : LV_LABEL_LONG_DOT);
+        lv_label_set_long_mode(app.rows[i], selected && browsing ? LV_LABEL_LONG_SCROLL_CIRCULAR : LV_LABEL_LONG_DOT);
         lv_obj_set_style_bg_opa(app.rows[i], selected ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
         lv_obj_set_style_text_color(app.rows[i], lv_color_hex(selected ? 0xECFFFA : 0xBBCBDD), 0);
     }
@@ -409,7 +419,7 @@ void child_line(App &app, const std::string &line)
     } else if (line.rfind("UID ", 0) == 0) {
         label(app.detail, line);
     } else if (line == "Scan result: success") {
-        label(app.status, "Amiibo read successful");
+        label(app.status, "NFC replies sent - check Switch");
         lv_obj_set_style_text_color(app.status, lv_color_hex(0x6EF1B4), 0);
     } else if (line == "Scan result: failed") {
         label(app.status, "Read incomplete - try again");
