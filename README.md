@@ -4,3 +4,4 @@
 
 - [MiMo Talk](mimo_talk/README.md) 支持流式语音识别、对话和预置音色播报。
 - [amiibo_sim](amiibo_sim/README.md) 用于在 CardputerZero 上选择并模拟本地 Amiibo 备份。
+- [Wallpaper](boot_assets/README.md) 通过局域网页面更换三段开机图、开机音频和锁屏图。

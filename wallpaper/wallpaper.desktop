@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Wallpaper
+Comment=Customize boot and lock-screen media over the local network
+Exec=/usr/bin/wallpaper
+Icon=share/images/wallpaper.png
+Terminal=false
+Categories=Utility;
+StartupNotify=false

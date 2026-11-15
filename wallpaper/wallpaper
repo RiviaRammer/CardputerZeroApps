@@ -1,0 +1,2 @@
+#!/bin/sh
+exec /usr/bin/python3 -E -s /usr/lib/wallpaper/main.py "$@"

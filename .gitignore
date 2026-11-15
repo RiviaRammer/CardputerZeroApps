@@ -1,0 +1,23 @@
+# Local environment and credentials
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.key
+*.pem
+*.p12
+*.pfx
+id_rsa
+id_dsa
+id_ecdsa
+id_ed25519
+
+# MiMo configuration under the former app directory name
+/MiMo/config.json
+/MiMo/config.local.json
+/MiMo/.config-*
+
+# Local logs, backups and built packages
+*.log
+*.bak
+*.deb

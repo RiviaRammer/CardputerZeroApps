@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wallpaper</title>
+<style>
+  :root { color-scheme: light; font: 16px/1.55 system-ui, sans-serif; color: #172a25; background: #eef1e9; }
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  main { max-width: 950px; margin: auto; padding: 34px 22px 56px; }
+  h1, h2, h3, p, dl { margin: 0; }
+  h1 { font-size: clamp(1.65rem, 5vw, 2.6rem); line-height: 1.2; margin-bottom: 18px; }
+  h2, h3 { font-size: 1.04rem; }
+  .warning { border: 1px solid #d5ae6c; border-left: 5px solid #986000; background: #fff3d7; padding: 16px 18px; border-radius: 10px; }
+  dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 5px 15px; margin-top: 12px; font-size: .86rem; }
+  dt { font-weight: 650; }
+  dd { margin: 0; }
+  code, output { overflow-wrap: anywhere; }
+  .controls, article { border: 1px solid #cbd8cc; background: #fcfdf9; border-radius: 12px; padding: 15px; }
+  .controls { margin: 20px 0 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+  .hint { color: #475a52; font-size: .87rem; }
+  #targets { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 265px), 1fr)); gap: 10px; }
+  article { display: grid; gap: 7px; align-content: start; }
+  article input, audio { width: 100%; }
+  .asset-actions { display: flex; flex-wrap: wrap; gap: 7px; }
+  .installed { display: grid; gap: 6px; }
+  input, button { font: inherit; }
+  button { width: fit-content; border: 1px solid #317360; border-radius: 6px; padding: 5px 12px; background: white; color: #165742; cursor: pointer; }
+  button:focus-visible, input:focus-visible { outline: 2px solid #157455; outline-offset: 2px; }
+  button:disabled { opacity: .48; cursor: default; }
+  .primary { background: #225d4b; color: white; }
+  img { display: block; width: auto; height: auto; max-width: 100%; background: black; border-radius: 4px; }
+  audio { max-width: 375px; }
+  .batch { margin: 0 0 14px; }
+  article output:empty { display: none; }
+  output { display: block; margin-top: 10px; white-space: pre-wrap; min-height: 1.4em; }
+  output[data-error] { color: #962a16; }
+  output .success { color: #14643f; font-weight: 650; }
+  @media (max-width: 640px) { dl { grid-template-columns: 1fr; gap: 2px; } dd { margin-bottom: 5px; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Wallpaper</h1>
+  <section class="warning" aria-labelledby="warning">
+    <h2 id="warning">刷图前请备份原文件</h2>
+    <p>刷图会直接覆盖写入目标，可能造成原图丢失。替换音频也会覆盖目标。请先把需要保留的文件备份到另一台设备。</p>
+    <dl id="originals"></dl>
+  </section>
+  <div class="controls">
+    <p class="hint">图片自动等比缩放、居中裁切。要保留边缘构图，请按上传框标注的比例准备。单文件最大 16 MiB。</p>
+  </div>
+  <div class="batch">
+    <button type="button" class="primary" id="batch" disabled>写入所有已选文件</button>
+    <output id="status" aria-live="polite"></output>
+  </div>
+  <section id="targets" aria-label="替换资源"></section>
+</main>
+<script>
+  const targets = __ASSET_TARGETS__;
+  const originals = document.querySelector('#originals');
+  const cards = document.querySelector('#targets');
+  const batch = document.querySelector('#batch');
+  const status = document.querySelector('#status');
+  const items = [];
+  let busy = false;
+
+  function element(name, content) {
+    const node = document.createElement(name);
+    node.textContent = content;
+    return node;
+  }
+
+  function button(label, action) {
+    const node = element('button', label);
+    node.type = 'button';
+    node.addEventListener('click', action);
+    return node;
+  }
+
+  function notice(output, message, error = false) {
+    output.textContent = message;
+    output.toggleAttribute('data-error', error);
+  }
+
+  function showSuccess(output, message) {
+    const [headline, detail] = message.split('\n');
+    const label = element('span', headline);
+    label.className = 'success';
+    output.removeAttribute('data-error');
+    output.replaceChildren(label);
+    if (detail) output.append(' ', detail);
+  }
+
+  async function waitForWrite(id, output) {
+    while (true) {
+      const response = await fetch('/write-status/' + id);
+      if (!response.ok) throw new Error(await response.text());
+      const progress = await response.json();
+      if (progress.done) {
+        if (!progress.ok) throw new Error(progress.message);
+        return progress.message;
+      }
+      if (output.textContent !== progress.message) notice(output, progress.message);
+      await new Promise(resolve => setTimeout(resolve, 400));
+    }
+  }
+
+  function selected() {
+    return items.filter(item => item.input.files.length);
+  }
+
+  function updateButtons() {
+    batch.disabled = busy || selected().length === 0;
+    for (const item of items) {
+      item.input.disabled = busy;
+      item.previewButton.disabled = busy || !item.input.files.length;
+      item.writeButton.disabled = busy || !item.input.files.length;
+      item.currentButton.disabled = busy;
+    }
+  }
+
+  function clearMedia(item) {
+    if (item.url) URL.revokeObjectURL(item.url);
+    item.url = undefined;
+    item.media.replaceChildren();
+  }
+
+  async function showMedia(item, response, label) {
+    if (!response.ok) throw new Error(await response.text());
+    const blob = await response.blob();
+    clearMedia(item);
+    const player = element(item.target.size ? 'img' : 'audio', '');
+    if (item.target.size) player.alt = item.target.title + ' · ' + label;
+    else player.controls = true;
+    item.url = URL.createObjectURL(blob);
+    player.src = item.url;
+    item.media.replaceChildren(element('p', label), player);
+  }
+
+  async function inspect(item) {
+    await run(item.status, async () => {
+      notice(item.status, '正在读取板上资源…');
+      const response = await fetch('/current/' + item.target.id);
+      const label = {
+        current: '当前文件',
+        'factory-reference': 'fb_load 当前使用内嵌图。这里预览的是启动分区里的 splash.bmp。',
+      }[response.headers.get('X-Asset-Source')];
+      await showMedia(item, response, label);
+      notice(item.status, '');
+    });
+  }
+
+  async function prepare(item) {
+    const file = item.input.files[0];
+    if (!file || !file.size || file.size > 16 * 1024 * 1024) {
+      throw new Error(item.target.title + '：请选择一个大小不超过 16 MiB 的文件。');
+    }
+    item.previewId = undefined;
+    notice(item.status, '正在上传并生成预览…');
+    const response = await fetch('/preview/' + item.target.id, {method: 'POST', body: file});
+    await showMedia(item, response, '新文件预览');
+    item.previewId = response.headers.get('X-Preview-Id');
+    notice(item.status, '');
+  }
+
+  async function run(output, job) {
+    if (busy) return;
+    busy = true;
+    updateButtons();
+    try {
+      await job();
+    } catch (error) {
+      notice(output, error.message, true);
+    } finally {
+      busy = false;
+      updateButtons();
+    }
+  }
+
+  async function write(itemsToWrite, output) {
+    await run(output, async () => {
+      notice(output, '正在准备所选文件…');
+      const previews = {};
+      try {
+        for (const item of itemsToWrite) {
+          if (!item.previewId) await prepare(item);
+          previews[item.target.id] = item.previewId;
+        }
+        notice(output, '请在板上确认写入。系统要求认证时，在板上键盘输入账户密码。');
+        const response = await fetch('/apply', {
+          method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(previews),
+        });
+        if (!response.ok) throw new Error(await response.text());
+        const {id} = await response.json();
+        const message = await waitForWrite(id, output);
+        showSuccess(output, message);
+        for (const item of itemsToWrite) {
+          item.input.value = '';
+          item.previewId = undefined;
+          if (output !== item.status) showSuccess(item.status, '已写入');
+        }
+      } catch (error) {
+        for (const item of itemsToWrite) {
+          item.previewId = undefined;
+          if (item.status.textContent === '正在上传并生成预览…') notice(item.status, '');
+        }
+        throw error;
+      }
+    });
+  }
+
+  for (const target of targets) {
+    const source = element('dd', '');
+    source.append(element('code', target.destination));
+    originals.append(element('dt', target.title), source);
+
+    const card = element('article', '');
+    const hint = element('p', target.size
+      ? target.size.join(' × ') + ' 像素（' + target.ratio + '） · PNG / JPEG / WebP / BMP'
+      : 'WAV / MP3 / FLAC / Ogg · 最长 30 秒');
+    hint.className = 'hint';
+    const input = element('input', '');
+    input.type = 'file';
+    input.setAttribute('aria-label', target.title);
+    input.accept = target.size ? '.png,.jpg,.jpeg,.webp,.bmp' : '.wav,.mp3,.flac,.ogg,.oga';
+    const item = {target, input, media: element('div', ''), status: element('output', '')};
+    item.media.className = 'installed';
+    item.status.setAttribute('aria-live', 'polite');
+    item.previewButton = button('生成预览', () => run(item.status, () => prepare(item)));
+    item.currentButton = button('查看当前', () => inspect(item));
+    item.writeButton = button('写入此项', () => write([item], item.status));
+    item.writeButton.className = 'primary';
+    const actions = element('div', '');
+    actions.className = 'asset-actions';
+    actions.append(item.currentButton, item.previewButton, item.writeButton);
+    card.append(element('h3', target.title), hint, input, actions, item.media, item.status);
+    cards.append(card);
+    items.push(item);
+
+    input.addEventListener('change', () => {
+      item.previewId = undefined;
+      clearMedia(item);
+      notice(item.status, '');
+      updateButtons();
+    });
+  }
+
+  batch.addEventListener('click', () => write(selected(), status));
+  updateButtons();
+</script>
+</body>
+</html>
