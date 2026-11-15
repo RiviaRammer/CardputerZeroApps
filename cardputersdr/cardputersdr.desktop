@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=CardputerSDR
+Comment=Airspy LCD and browser spectrum analyzer
+Exec=/usr/bin/cardputersdr
+Icon=/usr/share/APPLaunch/share/images/cardputersdr.png
+Terminal=false
+Categories=Utility;

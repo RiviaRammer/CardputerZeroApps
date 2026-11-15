@@ -1,0 +1,12 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CardputerSDR</title><link rel="stylesheet" href="/style.css"></head>
+<body><main>
+<header><div><span class="eyebrow">CARDPUTER ZERO / AIRSPY</span><h1>Cardputer<span>SDR</span></h1></div><div id="connection" class="badge">连接中</div></header>
+<section class="tuning"><div><label for="frequency">中心频率 · MHz</label><div class="frequency"><input id="frequency" type="number" min="24" max="1800" step="0.001" value="100.000"><span>MHz</span></div></div>
+<div class="controls"><label>采样率<select id="rate"><option value="3000000">3 MS/s</option></select></label><label>线性增益 <output id="gainValue">10</output><input id="gain" type="range" min="0" max="21" value="10"></label><button id="apply">应用调谐</button></div></section>
+<nav><button id="web" class="active">Web 频谱</button><button id="lcd">LCD 频谱</button><button id="pause">暂停画面</button><button id="retry">重连 Airspy</button><label class="fft-control">FFT Size <select id="fft-size" disabled><option value="4096">4096</option></select></label><label>底噪 <input id="floor" type="range" min="-140" max="-30" value="-100"><output id="floorValue">−100 dBFS</output></label></nav>
+<p id="notice" role="status">正在读取设备状态…</p>
+<section class="scope"><div class="scope-title"><span>频谱 <small>RELATIVE dBFS / BIN</small></span><span id="peak">—</span></div><canvas id="spectrum" width="1200" height="300" aria-label="实时频谱"></canvas><div id="axis"></div><canvas id="waterfall" width="1200" height="360" aria-label="频谱瀑布图"></canvas></section>
+<footer><span id="stats">等待 I/Q 数据</span><span>FFT / 瀑布图由此设备计算</span></footer>
+</main><script src="/app.js"></script></body></html>
